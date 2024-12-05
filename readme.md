@@ -7,7 +7,7 @@
 1. Клонируйте репозиторий:
 
     ```bash
-    git clone ([https://github.com/vlavrinov/project2](https://github.com/vlavrinov/project2))
+    git clone https://github.com/vlavrinov/project2
     ```
 
 2. Установите необходимые библиотеки:
