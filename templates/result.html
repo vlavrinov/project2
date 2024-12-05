@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Результаты прогноза погоды</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Результаты прогноза погоды</h1>
+
+    <h2>Город отправления: {{ weather_data.start_city }}</h2>
+    {% if weather_data.start_weather %}
+
+        <p>Температура: {{ weather_data.start_weather.main.temp }}°C</p>
+
+        <p>Скорость ветра: {{ weather_data.start_weather.wind.speed }} м/с</p>
+
+        <p>Влажность: {{ weather_data.start_weather.main.humidity }}%</p>
+        {% if weather_data.start_weather.rain %}
+
+            <p>Дождь (за последний час): {{ weather_data.start_weather.rain['1h'] }} мм</p>
+        {% endif %}
+        {% if weather_data.start_weather.snow %}
+
+            <p>Снег (за последний час): {{ weather_data.start_weather.snow['1h'] }} мм</p>
+        {% endif %}
+
+        <p><b>Погода:</b> {{ weather_data.start_status }}</p>
+    {% else %}
+
+        <p>Нет данных о погоде для города {{ weather_data.start_city }}.</p>
+    {% endif %}
+
+
+
+    <h2>Город назначения: {{ weather_data.end_city }}</h2>
+    {% if weather_data.end_weather %}
+
+        <p>Температура: {{ weather_data.end_weather.main.temp }}°C</p>
+        
+        <p>Скорость ветра: {{ weather_data.end_weather.wind.speed }} м/с</p>
+        
+        <p>Влажность: {{ weather_data.end_weather.main.humidity }}%</p>
+        
+        {% if weather_data.end_weather.rain %}
+        
+            <p>Дождь (за последний час): {{ weather_data.end_weather.rain['1h'] }} мм</p>
+        {% endif %}
+        {% if weather_data.end_weather.snow %}
+        
+            <p>Снег (за последний час): {{ weather_data.end_weather.snow['1h'] }} мм</p>
+        {% endif %}
+        
+        <p><b>Погода:</b> {{ weather_data.end_status }}</p>
+    {% else %}
+    
+        <p>Нет данных о погоде для города {{ weather_data.end_city }}.</p>
+    {% endif %}
+
+    <a href="/">Вернуться на главную</a>
+</body>
+</html>
