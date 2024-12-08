@@ -13,7 +13,7 @@
 2. Установите необходимые библиотеки:
 
     ```bash
-    pip install Flask requests geopy
+    pip install Flask requests
     ```
 
 3. Получите API ключ от AccuWeather.
