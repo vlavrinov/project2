@@ -1,48 +1,51 @@
 from flask import Flask, render_template, request
 import requests
 import json
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut
 
-API_KEY = "ae999113c2c98da99173260e9abccf58"
-URL = "https://api.openweathermap.org/data/2.5/"
+API_KEY = "XzKIblRO445awcuauGkULV8S3lzcAQLS"
+LOCATION_URL = "http://dataservice.accuweather.com/locations/v1/cities/autocomplete"
+FIVE_DAY_FORECAST_URL = "http://dataservice.accuweather.com/forecasts/v1/daily/5day/{}"
 
 app = Flask(__name__)
 
 # Функция для получения координат города
-def get_coordinates(city_name):
-    geolocator = Nominatim(user_agent="weather_app")
-    try:
-        location = geolocator.geocode(city_name, timeout=10)
-        if location:
-            return location.latitude, location.longitude
-        else:
-            return None, None
-    except GeocoderTimedOut:
-        return None, None
-    except Exception as e:
-        print(f"Ошибка получения координат: {e}")
-        return None, None
-
-# Функция для получения данных о погоде с OpenWeatherMap API
-def get_weather_data(latitude, longitude):
+def get_location_key(city_name):
     params = {
-        "lat": latitude,
-        "lon": longitude,
-        "appid": API_KEY,
-        "units": "metric",
+        "apikey": API_KEY,
+        "q": city_name
     }
     try:
-        response = requests.get(f"{URL}weather", params=params)
+        response = requests.get(LOCATION_URL, params=params)
         response.raise_for_status()
         data = response.json()
-        return data
+        if data:
+            return data[0]["Key"]
+        else:
+            return None
     except requests.exceptions.RequestException as e:
-        print(f"Ошибка при запросе к OpenWeatherMap API: {e}")
+        print(f"Ошибка при запросе к AccuWeather Location API: {e}")
         return None
-    except (json.JSONDecodeError, KeyError) as e:
-        print(f"Ошибка при обработке данных от API: {e}")
+    except (IndexError, KeyError) as e: 
+        print(f"Ошибка при обработке данных Location API: {e}")
         return None
+
+# Функция для получения данных о погоде с OpenWeatherMap API
+def get_weather_data(location_key):
+    try:
+        response = requests.get(FIVE_DAY_FORECAST_URL.format(location_key), params={"apikey": API_KEY, "metric": True})
+        response.raise_for_status()
+        data = response.json()
+        if data and "DailyForecasts" in data and data["DailyForecasts"]:
+            return data["DailyForecasts"][0] #  Данные для первого дня из 5-дневного прогноза
+        else:
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"Ошибка при запросе к AccuWeather Forecast API: {e}")
+        return None
+    except (IndexError, KeyError) as e:
+        print(f"Ошибка обработки данных Forecast API: {e}")
+        return None
+
 
 # Модель для оценки неблагоприятных погодных условий
 def check_bad_weather(weather_data):
@@ -50,27 +53,28 @@ def check_bad_weather(weather_data):
         return "Нет данных о погоде"
 
     try:
-        temperature = weather_data["main"]["temp"]
-        wind_speed = weather_data["wind"]["speed"]
-        # Используем данные о дожде или снеге, если они есть
-        rain = weather_data.get("rain", {}).get("1h", 0)
-        snow = weather_data.get("snow", {}).get("1h", 0)
-        # Если есть данные о дожде и снеге, берем максимальное значение
-        precipitation = max(rain, snow)
-        humidity = weather_data["main"]["humidity"]
+        temperature_max = weather_data["Temperature"]["Maximum"]["Value"]
+        temperature_min = weather_data["Temperature"]["Minimum"]["Value"]
+        wind_speed_day = weather_data.get("Day", {}).get("Wind", {}).get("Speed", {}).get("Value", 0)
+        wind_speed_night = weather_data.get("Night", {}).get("Wind", {}).get("Speed", {}).get("Value", 0)
+        precipitation_day = weather_data.get("Day", {}).get("HasPrecipitation", False)
+        precipitation_night = weather_data.get("Night", {}).get("HasPrecipitation", False)
+
+        print(f"Температура (макс): {temperature_max}, Температура (мин): {temperature_min}")
+        print(f"Скорость ветра (день): {wind_speed_day}, Скорость ветра (ночь): {wind_speed_night}")
+        print(f"Осадки (день): {precipitation_day}, Осадки (ночь): {precipitation_night}")
+
+        if temperature_max > 30 or temperature_min < -5:
+            return "Ой-ой, погода плохая (температура)"
+        if wind_speed_day > 10 or wind_speed_night > 10:
+            return "Ой-ой, погода плохая (ветер)"
+        if precipitation_day or precipitation_night:
+            return "Ой-ой, погода плохая (осадки)"
 
     except KeyError as e:
-        print(f"Ошибка: в данных о погоде нет ключа {e}")
+        print(f"Ошибка: в данных о погоде нет ключа {e}: {weather_data}")
         return "Недостаточно данных о погоде"
 
-    if temperature < 0 or temperature > 35:
-        return "Ой-ой, погода плохая (температура)"
-    if wind_speed > 15: 
-        return "Ой-ой, погода плохая (ветер)"
-    if precipitation > 0.5: 
-        return "Ой-ой, погода плохая (осадки)"
-    if humidity > 80:
-        return "Ой-ой, погода плохая (влажность)"
     return "Погода — супер"
 
 # Обработчик главной страницы
@@ -84,20 +88,17 @@ def index():
         if not start_city or not end_city:
             weather_status = "Пожалуйста, введите названия обоих городов."
             return render_template("index.html", weather_status=weather_status)
-    
-        # Получение координат для начального и конечного городов
-        start_lat, start_lon = get_coordinates(start_city)
-        end_lat, end_lon = get_coordinates(end_city)
-    
-        if start_lat is None or end_lat is None:
-            weather_status = "Не удалось определить координаты одного или обоих городов. Пожалуйста, проверьте правильность написания."
+
+        start_location_key = get_location_key(start_city)
+        end_location_key = get_location_key(end_city)
+
+        if not start_location_key or not end_location_key:
+            weather_status = "Не удалось определить местоположение одного или обоих городов."
             return render_template("index.html", weather_status=weather_status)
+
+        start_weather_data = get_weather_data(start_location_key)
+        end_weather_data = get_weather_data(end_location_key)
     
-        # Получение данных о погоде для начального и конечного городов
-        start_weather_data = get_weather_data(start_lat, start_lon)
-        end_weather_data = get_weather_data(end_lat, end_lon)
-    
-        # Оценка погодных условий для начального и конечного городов
         start_weather_status = check_bad_weather(start_weather_data)
         end_weather_status = check_bad_weather(end_weather_data)
         
@@ -113,6 +114,12 @@ def index():
 
     return render_template("index.html", weather_status=weather_status)
 
-# Запуск приложения
+
+
+
+
+
+
+
 if __name__ == "__main__":
     app.run(debug=True)
